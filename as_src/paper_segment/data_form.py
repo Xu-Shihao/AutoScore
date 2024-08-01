@@ -6,83 +6,159 @@ import glob
 from tqdm import tqdm
 from PIL import Image
 import shutil
-
+import multiprocessing as mp
+import pickle
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from as_src.model import model
 from seg_data_generator import segment_exam_paper
+from remove_horizontal_line import detect_and_remove_horizontal_lines
 
-# 假设这个函数已经存在，并能够返回所需的数据
-def get_image_data() -> Tuple[str, List[Tuple[int, int, int, int, str]]]:
-    """
-    返回图片名称和标注数据
-    :return: (图片名称, [(x1, y1, x2, y2, label), ...])
-    """
+#并行读取处理结果
+def process_image(args: Tuple[str, str]) -> Tuple[str, List[Tuple[int, int, int, int, str]]]:
+    img_path, output_folder = args
+    basename = os.path.splitext(os.path.basename(img_path))[0]
 
-    data_folder = r"D:\code\AutoScore\data\TX"
-    output_folder = r"D:\code\AutoScore\AutoScore\as_src\paper_segment\dataset\segmentation"
+    # print(basename)
+    if img_path.endswith("B.TIF"):
+        side = 1
+    else:
+        side = 0
+
+    output_path = os.path.join(output_folder, os.path.basename(img_path)[:-4] + ".png")
+    segmentation_results = segment_exam_paper(img_path, output_path=output_path, side=side)
+
+    bounding_boxes = []
+    cls_names = []
+    output_img_folder=os.path.join(output_folder, "preprocess", basename)
+    pickle_file = os.path.join(output_img_folder, "segmentation_data.pkl")
+
+    if os.path.exists(output_img_folder):
+        # print("Folder exists, attempting to load pickle file...")
+        if os.path.exists(pickle_file):
+            with open(pickle_file, 'rb') as f:
+                data = pickle.load(f)
+            # print("Loaded data from pickle file.")
+            bounding_boxes = data['bounding_boxes']
+            cls_names = data['cls_names']
+        else:
+            return None
+    else:
+        return None
+
+    result = []
+    if side == 0 and len(segmentation_results) == 6 and cls_names.count('objective_problem') == 3:
+        for i, name in enumerate(cls_names):
+            if name == 'objective_problem':
+                result.append(bounding_boxes[i] + ["1"])
+        
+        for idx, area in enumerate(segmentation_results):
+            if idx == 2:
+                result.append([area["coordinates"]["x"], area["coordinates"]["y"], area["coordinates"]["w"], area["coordinates"]["h"]] + ["2"])
+            elif idx > 2:
+                result.append([area["coordinates"]["x"], area["coordinates"]["y"], area["coordinates"]["w"], area["coordinates"]["h"]] + ["3"])
+    
+    elif side == 1 and len(segmentation_results) == 3:
+        for idx, area in enumerate(segmentation_results):
+            result.append([area["coordinates"]["x"], area["coordinates"]["y"], area["coordinates"]["w"], area["coordinates"]["h"]] + ["3"])
+
+    if (side == 0 and len(result) == 7) or (side == 1 and len(result) == 3):
+        return (img_path, result)
+        
+    return None
+
+def get_image_data() -> List[Tuple[str, List[Tuple[int, int, int, int, str]]]]:
+    data_folder = "/home/TX"
+    output_folder = "/home/segmentation"
     os.makedirs(output_folder, exist_ok=True)
 
-    auto_score = model()
+    img_paths = sorted(glob.glob(os.path.join(data_folder, "*/*/*.TIF")))
     
-    results = []
-    for img_path in tqdm(sorted(glob.glob(os.path.join(data_folder, "*\*\*.TIF")))):
+    with mp.Pool(processes=60) as pool:
+        args = [(img_path, output_folder) for img_path in img_paths]
+        results = list(tqdm(
+            pool.imap(process_image, args),
+            total=len(img_paths),
+            desc="Processing images"
+        ))
+    
+    return [result for result in results if result is not None]
+
+# def get_image_data() -> List[Tuple[str, List[Tuple[int, int, int, int, str]]]]:
+#     data_folder = "/home/TX"
+#     output_folder = "/home/segmentation"
+#     os.makedirs(output_folder, exist_ok=True)
+    
+#     auto_score = model()
+    
+#     results = []
+#     for img_path in tqdm(sorted(glob.glob(os.path.join(data_folder, "*/*/*.TIF")))[60000:][::-1]):
         
-        basename = os.path.splitext(os.path.basename(img_path))[0]
-        if img_path.endswith("B.TIF"):
-            side = 1
-        else:
-            side = 0
-
-        output_path = os.path.join(output_folder, os.path.basename(img_path)[:-4] + ".png")
-        segmentation_results = segment_exam_paper(img_path, output_path=output_path, side=side)
-        try:
-            bounding_boxes, cls_names = auto_score.paper_segmentation(img_path=img_path,  output_img_folder=os.path.join(output_folder, "preprocess", basename))
-        except:
-            bounding_boxes = []
-            cls_names = []
-
-        result = []
-        if side == 0 and len(segmentation_results) == 6 and cls_names.count('objective_problem') == 3:
-            
-            """
-            |  id   | content  |
-            |  ----  | ----  |
-            | 0  | 学号 |
-            | 1  | 主观题 |
-            | 2  | 填空题 |
-            | 3  | 客观题 |
-            """
-            
-            for i, name in enumerate(cls_names):
-                if name == 'objective_problem':
-                    result.append(bounding_boxes[i] + ["1"])
-            
-            for idx, area in enumerate(segmentation_results):
-                if idx == 2:
-                    result.append([area["coordinates"]["x"],area["coordinates"]["y"],area["coordinates"]["w"],area["coordinates"]["h"]] + ["2"])
-                elif idx > 2:
-                    result.append([area["coordinates"]["x"],area["coordinates"]["y"],area["coordinates"]["w"],area["coordinates"]["h"]] + ["3"])
         
-        elif side == 1 and len(segmentation_results) == 3:
+#         basename = os.path.splitext(os.path.basename(img_path))[0]
+#         if img_path.endswith("B.TIF"):
+#             side = 1
+#         else:
+#             side = 0
+#         image_with_remove_horizontal_lines = os.path.join(output_folder, os.path.basename(img_path)[:-4] + "_removed_hrz_lines.png")
+#         output_path = os.path.join(output_folder, os.path.basename(img_path)[:-4] + ".png")
+
+
+#         # 去掉试卷横线（折痕）
+#         x_start = 200  # Adjust these values based on your specific requirements
+#         x_end = -200
+#         min_line_length = 1000  # Minimum length of lines to consider
+#         detect_and_remove_horizontal_lines(img_path, image_with_remove_horizontal_lines, x_start, x_end, min_line_length)
+
+#         # 两种方法分割试卷，yolo提取选择题，直线分割提取其他大题区域
+#         segmentation_results = segment_exam_paper(image_with_remove_horizontal_lines, output_path=output_path, side=side)
+#         try:
+#             bounding_boxes, cls_names = auto_score.paper_segmentation(img_path=image_with_remove_horizontal_lines,  output_img_folder=os.path.join(output_folder, "preprocess", basename))
+#         except:
+#             bounding_boxes = []
+#             cls_names = []
+
+#         result = []
+#         if side == 0 and len(segmentation_results) == 6 and cls_names.count('objective_problem') == 3:
             
-            for idx, area in enumerate(segmentation_results):
-                result.append([area["coordinates"]["x"],area["coordinates"]["y"],area["coordinates"]["w"],area["coordinates"]["h"]] + ["3"])
+#             """
+#             |  id   | content  |
+#             |  ----  | ----  |
+#             | 0  | 学号 |
+#             | 1  | 主观题 |
+#             | 2  | 填空题 |
+#             | 3  | 客观题 |
+#             """
+            
+#             for i, name in enumerate(cls_names):
+#                 if name == 'objective_problem':
+#                     result.append(bounding_boxes[i] + ["1"])
+            
+#             for idx, area in enumerate(segmentation_results):
+#                 if idx == 2:
+#                     result.append([area["coordinates"]["x"],area["coordinates"]["y"],area["coordinates"]["w"],area["coordinates"]["h"]] + ["2"])
+#                 elif idx > 2:
+#                     result.append([area["coordinates"]["x"],area["coordinates"]["y"],area["coordinates"]["w"],area["coordinates"]["h"]] + ["3"])
+        
+#         elif side == 1 and len(segmentation_results) == 3:
+            
+#             for idx, area in enumerate(segmentation_results):
+#                 result.append([area["coordinates"]["x"],area["coordinates"]["y"],area["coordinates"]["w"],area["coordinates"]["h"]] + ["3"])
 
-        if side == 0 and len(result) == 7 or side == 1 and len(result) == 3: #第一页7题，第二页3题
-            results.append((output_path, result))
+#         if side == 0 and len(result) == 7 or side == 1 and len(result) == 3: #第一页7题，第二页3题
+#             results.append((img_path, result))
 
-    return results
+#     return results
 
 
 def convert_to_yolo_format(image_width: int, image_height: int, box: Tuple[int, int, int, int, str]) -> str:
     """
     将边界框坐标转换为YOLO格式
     """
-    x1, y1, x2, y2, label = box
-    x_center = (x1 + x2) / (2 * image_width)
-    y_center = (y1 + y2) / (2 * image_height)
-    width = (x2 - x1) / image_width
-    height = (y2 - y1) / image_height
+    x1, y1, width, height, label = box
+    x_center = (2 * x1 + width) / (2 * image_width)
+    y_center = (2 * y1 + height) / (2 * image_height)
+    width = width / image_width
+    height = height / image_height
     class_id = label
     return f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}"
 
@@ -140,7 +216,7 @@ names: {list(class_mapping.values())}
         f.write(yaml_content)
 
 def main():
-    base_path = r'D:\code\AutoScore\AutoScore\as_src\paper_segment\dataset'  # 替换为您的数据集路径
+    base_path = '/home/dataset'  # 替换为您的数据集路径
     class_mapping = {
         '学号': "0",
         '填空题': "1",

@@ -77,13 +77,6 @@ class model:
 
             # select the bounding box in the pixel range
             bounding_boxes, cls_names = self.filter_bounding_boxes(bounding_boxes, result.boxes.conf.cpu().numpy(), cls_names, pixel_ranges)
-            
-            for i, name in enumerate(cls_names):
-                if name == 'objective_problem':
-                    # 根据固定的选择题高度(150 pixel)过滤掉检测出题目的部分
-                    if bounding_boxes[i][3] - bounding_boxes[i][1] > 155:
-                        bounding_boxes[i][1] = bounding_boxes[i][3] - 155
-
             annotate_image(img_path, bounding_boxes, cls_names, os.path.join(output_img_folder, "paper_segmentation.jpg"))
             id = 0
             for (x, y, x1, y1), cls_name in zip(bounding_boxes, cls_names):
