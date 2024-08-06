@@ -9,6 +9,7 @@ from log.log_schedular import setup_logger
 import numpy as np
 from as_src.model import model
 from random import sample
+from as_src.plot import crop_image
 from as_src.paper_segment.seg_data_generator import segment_exam_paper, cut_and_save_image
 
 logger = setup_logger()
@@ -87,11 +88,11 @@ if __name__ == "__main__":
     用于测试函数
     """
 
-    output_path = r"D:\code\AutoScore\AutoScore\output\results_gpt4_random100_3step.xlsx"
+    output_path = "/home/AutoScore/output/results_gpt4_random100_ft-yolov8-seg.xlsx"
 
     # load answer
-    df_1 = pd.read_excel("D:\code\AutoScore\data\g2dh2\文件考号对应关系.xlsx", index_col=None, header=0)
-    df_2 = pd.read_excel("D:\code\AutoScore\data\g2dh2\期末数学成绩.xls", index_col=None, header=0)
+    df_1 = pd.read_excel("/home/TX/文件考号对应关系.xlsx", index_col=None, header=0)
+    df_2 = pd.read_excel("/home/TX/期末数学成绩.xls", index_col=None, header=0)
     merged_df = pd.merge(df_1, df_2, on='考号', how='left')
     
     # initial
@@ -99,17 +100,20 @@ if __name__ == "__main__":
     total = 0
     results = []
     auto_score = model()
-    gt_file_path = r"D:\code\AutoScore\data\g2dh2\期末数学试题_答案_convert.docx"
+    gt_file_path = "/home/TX/期末数学试题_答案_convert.docx"
     
     # load the ground truth
     text = load_doclatex(gt_file_path)
     answers = extract_questions_and_answers(text)
+
+    # load model
+    auto_score = model()
     
-    for img_path in sample(glob.glob(r"D:\code\AutoScore\data\TX\*\OMR*\*A.TIF"), 100):
+    for img_path in sorted(glob.glob("/home/TX/*/OMR*/*A.TIF"))[:100]:
 
         basename = os.path.splitext(os.path.basename(img_path))[0]
-        preprocess_folder = os.path.splitext(img_path.replace(r"D:\code\AutoScore\data", r"D:\code\AutoScore\AutoScore\output\preprocess"))[0]
-        # img_path=r"D:\code\AutoScore\AutoScore\data\g2dh2\OMR0001\g2dh229_01081312_02A.TIF"
+        preprocess_folder = os.path.splitext(img_path.replace("/home/TX", "/home/AutoScore/output/preprocess"))[0]
+        # img_path="/home/AutoScore/data/g2dh2/OMR0001/g2dh229_01081312_02A.TIF"
 
         segmentation_img_folder=os.path.join(preprocess_folder, r"segmentation")
         cloze_segmentation_path=os.path.join(preprocess_folder, r"cloze_segmentation")
@@ -117,11 +121,14 @@ if __name__ == "__main__":
         os.makedirs(cloze_segmentation_path, exist_ok=True)
         
         ## segment the cloze area
-
         # use pretrained yolo model
-        auto_score = model()
-        auto_score.paper_segmentation(img_path=img_path,  output_img_folder=segmentation_img_folder)
-        cloze_image_file_name = sorted(glob.glob(os.path.join(segmentation_img_folder,"subjective_problem_*.jpg")), key=extract_number)[0]
+        bounding_boxes, cls_names = auto_score.paper_segmentation(img_path=img_path,  output_img_folder=segmentation_img_folder)
+        for bbox, cls_name in zip(bounding_boxes, cls_names):
+            if cls_name == "fillin_problem":
+                break
+        
+        cloze_image_file_name = os.path.join(segmentation_img_folder, "cloze_image.jpg")
+        crop_image(img_path, bbox, cloze_image_file_name)
         reg_boxes = auto_score.cloze_problem_segmentation(image_path=cloze_image_file_name, output_img_folder=cloze_segmentation_path)
 
         # use contour detection (hard to fulfill all images)
@@ -135,7 +142,7 @@ if __name__ == "__main__":
 
         # skip if not 4 cloze problems are split
         if not reg_boxes or len(reg_boxes) != 4:
-            logger.error(f"The number of detected cloze questions are wrong. File name: {img_path}")
+            logger.error(f"The number of detected cloze questions are wrong. Number of reg boxes: {len(reg_boxes)}, File name: {img_path}")
             continue
 
         # judge 
@@ -154,7 +161,7 @@ if __name__ == "__main__":
             flag = True
             while flag:
                 try:
-                    respose_json = auto_score.cloze_problem_solving_3step(image_path=cloze_img_path,  ground_truth=gt)
+                    respose_json = auto_score.cloze_problem_solving(image_path=cloze_img_path,  ground_truth=gt)
                     if not isinstance(respose_json, dict):
                             respose_json = parse_llm_json(respose_json)
                             ans = respose_json['image content']

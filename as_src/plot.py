@@ -1,6 +1,7 @@
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 from log.log_schedular import setup_logger
+import cv2
 
 logger = setup_logger()
 
@@ -49,6 +50,29 @@ def annotate_image(image_path, bounding_boxes, labels, output_path):
     # Save the annotated image
     image.save(output_path)
     logger.info(f"Annotated image saved to {output_path}")
+
+def crop_image(image_path, bbox, output_path):
+    """
+    根据给定的bounding box裁剪图片并保存
+
+    :param image_path: 原始图片的路径
+    :param bbox: 边界框，格式为(x1, y1, x2, y2)
+    :param output_path: 裁剪后图片的输出路径
+    """
+    # 读取图片
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Error: Unable to load image at {image_path}")
+        return
+    
+    # 解包边界框
+    x1, y1, x2, y2 = bbox
+    
+    # 使用边界框裁剪图片
+    cropped_image = image[int(y1):int(y2), int(x1):int(x2)]
+    
+    # 保存裁剪后的图片
+    cv2.imwrite(output_path, cropped_image)
 
 # Example usage
 if __name__ == "__main__":

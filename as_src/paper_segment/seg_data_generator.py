@@ -132,17 +132,17 @@ def segment_exam_paper(image_path, output_path = None, side = None):
         else:
             raise f"Side '{side}' is not support at this time."
 
-    if output_path:
-        # Draw rectangles and number them
-        for i, (x, y, w, h, _) in enumerate(sorted_contours):
-            color = (0, 255, 0)  # Green color
-            thickness = 2
-            cv2.rectangle(img, (x, y), (x+w, y+h), color, thickness)
-            # Add question number
-            cv2.putText(img, f'Q{i+1}', (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+    # if output_path:
+    #     # Draw rectangles and number them
+    #     for i, (x, y, w, h, _) in enumerate(sorted_contours):
+    #         color = (0, 255, 0)  # Green color
+    #         thickness = 2
+    #         cv2.rectangle(img, (x, y), (x+w, y+h), color, thickness)
+    #         # Add question number
+    #         cv2.putText(img, f'Q{i+1}', (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
         
-        # Save or display the result
-        cv2.imwrite(output_path, img)
+    #     # Save or display the result
+    #     cv2.imwrite(output_path, img)
 
     # Create list of results
     results = []

@@ -16,3 +16,8 @@ torchvision==0.15.2
 tqdm==4.66.2
 transformers==4.42.4
 ultralytics==8.2.58
+docx2txt
+mammoth
+docxlatex
+openpyxl
+xlrd

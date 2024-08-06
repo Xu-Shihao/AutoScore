@@ -49,13 +49,16 @@ def process_image(args: Tuple[str, str]) -> Tuple[str, List[Tuple[int, int, int,
     if side == 0 and len(segmentation_results) == 6 and cls_names.count('objective_problem') == 3:
         for i, name in enumerate(cls_names):
             if name == 'objective_problem':
-                result.append(bounding_boxes[i] + ["1"])
+                # (x, y, x1, y) -> (x, y, w, h)
+                result.append([bounding_boxes[i][0], bounding_boxes[i][1], 
+                               bounding_boxes[i][2] - bounding_boxes[i][0], 
+                               bounding_boxes[i][3] - bounding_boxes[i][1]] + ["3"])
         
         for idx, area in enumerate(segmentation_results):
             if idx == 2:
                 result.append([area["coordinates"]["x"], area["coordinates"]["y"], area["coordinates"]["w"], area["coordinates"]["h"]] + ["2"])
             elif idx > 2:
-                result.append([area["coordinates"]["x"], area["coordinates"]["y"], area["coordinates"]["w"], area["coordinates"]["h"]] + ["3"])
+                result.append([area["coordinates"]["x"], area["coordinates"]["y"], area["coordinates"]["w"], area["coordinates"]["h"]] + ["1"])
     
     elif side == 1 and len(segmentation_results) == 3:
         for idx, area in enumerate(segmentation_results):
@@ -63,7 +66,7 @@ def process_image(args: Tuple[str, str]) -> Tuple[str, List[Tuple[int, int, int,
 
     if (side == 0 and len(result) == 7) or (side == 1 and len(result) == 3):
         return (img_path, result)
-        
+
     return None
 
 def get_image_data() -> List[Tuple[str, List[Tuple[int, int, int, int, str]]]]:
@@ -91,7 +94,7 @@ def get_image_data() -> List[Tuple[str, List[Tuple[int, int, int, int, str]]]]:
 #     auto_score = model()
     
 #     results = []
-#     for img_path in tqdm(sorted(glob.glob(os.path.join(data_folder, "*/*/*.TIF")))[60000:][::-1]):
+#     for img_path in tqdm(sorted(glob.glob(os.path.join(data_folder, "*/*/*.TIF")))[:]):
         
         
 #         basename = os.path.splitext(os.path.basename(img_path))[0]

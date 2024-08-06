@@ -37,8 +37,6 @@ def detect_and_remove_horizontal_lines(input_path, output_path, x_start, x_end, 
 
     # Filter lines based on x_start and x_end
     lines_to_remove = [line for line in merged_lines if line[0] <= x_start and line[1] >= img.shape[1] + x_end]
-    
-    print(len(lines_to_remove))
 
     # Remove the lines with smart filling
     result = img.copy()

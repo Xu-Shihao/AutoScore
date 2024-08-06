@@ -28,7 +28,7 @@ class model:
             2: 'fillin_problem',
             3: 'objective_problem'
         }
-        self.seg_model = YOLO(model='/home/AutoScore/OCRAutoScore/segmentation/Layout4Card/runs/detect/train3/weights/best.pt')
+        self.seg_model = YOLO(model='/home/AutoScore/OCRAutoScore/segmentation/Layout4Card/runs/detect/train5/weights/best.pt')
         self.ocr = paddleocr.PaddleOCR(use_angle_cls=True, lang=language)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14").to(self.device)
@@ -85,6 +85,7 @@ class model:
                         bounding_boxes[i][1] = bounding_boxes[i][3] - 155
 
             annotate_image(img_path, bounding_boxes, cls_names, os.path.join(output_img_folder, "paper_segmentation.jpg"))
+
             id = 0
             for (x, y, x1, y1), cls_name in zip(bounding_boxes, cls_names):
                 cropped_img = img[int(y):int(y1), int(x):int(x1)]
@@ -102,8 +103,8 @@ class model:
 
     def cloze_problem_segmentation(self, image_path:str, output_img_folder:str):
 
-        if os.path.exists(output_img_folder):
-            return None
+        # if os.path.exists(output_img_folder):
+        #     return None
 
         model = cloze_segment_model(output_folder_name = output_img_folder, debug=False)
         res = model.process(image_path, os.path.splitext(os.path.basename(image_path))[0])
@@ -325,8 +326,8 @@ Provide your response in JSON format with the following structure:
                 nearest_box = bounding_boxes[nearest_box_index]
                 nearest_label = labels[nearest_box_index]
                 
-                filtered_boxes.append(nearest_box)
-                filtered_labels.append(nearest_label)
+                # filtered_boxes.append(nearest_box)
+                # filtered_labels.append(nearest_label)
                 logger.error(f"No bounding box found in range {pixel_range}. Nearest box: {nearest_box}, Label: {nearest_label}")
         
         return filtered_boxes, filtered_labels
